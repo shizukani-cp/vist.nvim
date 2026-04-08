@@ -1,0 +1,66 @@
+*vist.txt* The extensible buffer-to-action engine.     Last Change: 2026-04-08
+
+==============================================================================
+INTRODUCTION                                                  *vist.nvim*
+
+A generic framework for creating and managing interactive list buffers.
+It allows users to project data into a buffer and sync changes back via 
+standard Vim motions and commands like `:w`.
+
+==============================================================================
+USAGE                                                       *vist-usage*
+
+Define an adapter and pass it to the open function.
+Below is a simple example of a task list:
+
+>lua
+    local vist = require("vist.core")
+
+    local my_adapter = {
+        bufname = function() return "VIST_TASKS" end,
+        list = function()
+            return {
+                { id = 1, display = "Buy milk", icon = "󰄱" },
+                { id = 2, display = "Write code", icon = "󰄲" },
+            }
+        end,
+        open_item = function(id, line)
+            print("Opened item: " .. id)
+        end,
+        confirm = function(actions)
+            return vim.fn.confirm("Apply changes?", "&Yes\n&No") == 1
+        end,
+    }
+
+    vist.open(my_adapter)
+<
+
+==============================================================================
+DATA TYPES                                                   *vist-types*
+
+Vist.Item                                                    *Vist.Item*
+    A table representing a single row in the list.
+    - id: (number) Unique identifier for the item (Required).
+    - display: (string) Text to show in the buffer.
+    - icon: (string) Icon displayed at the beginning of the line.
+    - icon_hl: (string) Highlight group for the icon.
+
+Vist.Adapter                                                 *Vist.Adapter*
+    An interface used to define the list's behavior.
+    - bufname: fun(): string (Required)
+    - list: fun(): Vist.Item[] (Required)
+    - parse: fun(state: Vist.State[]): Vist.Action[]
+    - do_action: fun(action: Vist.Action)
+    - open_item: fun(id: number, line: string)
+    - confirm: fun(actions: Vist.Action[]): boolean
+
+==============================================================================
+FUNCTIONS                                                *vist-functions*
+
+vist.open({adapter})                                         *vist.open()*
+    Initializes and opens the list buffer using the provided {adapter}.
+    The buffer uses `buftype=acwrite` and triggers the adapter's logic on
+    write commands (e.g., `:w`).
+
+==============================================================================
+vim:tw=78:ft=help:norl:
