@@ -1,5 +1,5 @@
 ---@class Vist.Item
----@field id number
+---@field id string
 ---@field display? string
 ---@field icon? string
 ---@field icon_hl? string
@@ -10,7 +10,7 @@
 ---@field data? any
 
 ---@class Vist.State
----@field id? number
+---@field id? string
 ---@field line string
 
 ---@class Vist.Adapter
@@ -22,6 +22,22 @@
 ---@field on_open? fun(bufnr: number)
 ---@field confirm? fun(actions: Vist.Action<string>[]): boolean
 
+local function parse_line(line)
+    local id, rest = line:match("^%s*{(.-)}%s*(.*)$")
+
+    if id then
+        local clean_text = rest
+        local path_part = rest:match("%s+(.*)$")
+        if path_part then
+            clean_text = path_part
+        end
+        return id, clean_text
+    else
+        local clean_text = line:match("^%s*(.*)$") or line
+        return nil, clean_text
+    end
+end
+
 local M = {}
 
 ---@param adapter Vist.Adapter
@@ -30,7 +46,8 @@ function M.open(adapter)
     local items = adapter.list()
     local lines = {}
     for _, item in ipairs(items) do
-        local text = item.display or tostring(item.id) or ""
+        local icon = item.icon and (item.icon .. " ") or ""
+        local text = string.format("{%s}%s%s", item.id, icon, item.display or tostring(item.id))
         table.insert(lines, "  " .. text)
     end
 
@@ -45,21 +62,22 @@ function M.open(adapter)
     vim.bo[buf].modified = false
     vim.bo[buf].buftype = "acwrite"
     vim.bo[buf].bufhidden = "hide"
-
-    local ns_id = vim.api.nvim_create_namespace("vist")
+    vim.api.nvim_set_option_value("conceallevel", 2, { scope = "local", win = 0 })
+    vim.cmd([[syntax match VistId /^\s*{.*}/ conceal]])
+    vim.wo.conceallevel = 2
+    vim.api.nvim_set_option_value("concealcursor", "nvc", { scope = "local", win = 0 })
+    local ns_id = vim.api.nvim_create_namespace("vist_icons")
     for i, item in ipairs(items) do
-        local row = i - 1
-        local opts = {
-            id = item.id,
-            invalidate = true,
-        }
-
         if item.icon then
-            opts.virt_text = { { item.icon .. " ", item.icon_hl or "None" } }
-            opts.virt_text_pos = "overlay"
-        end
+            local row = i - 1
+            local id_part = string.format("{%s}", item.id)
+            local start_col = 2 + #id_part
 
-        vim.api.nvim_buf_set_extmark(buf, ns_id, row, 0, opts)
+            vim.api.nvim_buf_set_extmark(buf, ns_id, row, start_col, {
+                end_col = start_col + #item.icon,
+                hl_group = item.icon_hl or "None",
+            })
+        end
     end
 
     local group = vim.api.nvim_create_augroup("VistGroup_" .. buf, { clear = true })
@@ -67,17 +85,11 @@ function M.open(adapter)
         buffer = buf,
         group = group,
         callback = function()
-            local ns = vim.api.nvim_create_namespace("vist")
             local current_lines = vim.api.nvim_buf_get_lines(0, 0, -1, false)
             local state = {}
 
-            for i, line in ipairs(current_lines) do
-                local marks = vim.api.nvim_buf_get_extmarks(0, ns, { i - 1, 0 }, { i - 1, -1 }, {})
-                local id = nil
-                if #marks > 0 then
-                    id = marks[#marks][1]
-                end
-                local clean_text = line:match("^%s%s(.*)$") or line
+            for _, line in ipairs(current_lines) do
+                local id, clean_text = parse_line(line)
                 table.insert(state, { id = id, text = clean_text })
             end
 
@@ -102,13 +114,10 @@ function M.open(adapter)
     vim.keymap.set("n", "<CR>", function()
         local row = vim.api.nvim_win_get_cursor(0)[1] - 1
         local line = vim.api.nvim_buf_get_lines(0, row, row + 1, false)[1]
-        line = line:gsub("^  ", "")
-        local ns = vim.api.nvim_create_namespace("vist")
-        local marks = vim.api.nvim_buf_get_extmarks(0, ns, { row, 0 }, { row, -1 }, {})
 
-        if #marks > 0 then
-            local id = marks[#marks][1]
-            local _, _ = pcall(adapter.open_item, id, line)
+        local id, clean_text = parse_line(line)
+        if id then
+            local _, _ = pcall(adapter.open_item, id, clean_text)
         end
     end, { buffer = buf, silent = true, noremap = true })
     local _, _ = pcall(adapter.on_open, buf)
