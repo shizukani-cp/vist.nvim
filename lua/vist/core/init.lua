@@ -48,7 +48,7 @@ function M.open(adapter)
     for _, item in ipairs(items) do
         local icon = item.icon and (item.icon .. " ") or ""
         local text = string.format("{%s}%s%s", item.id, icon, item.display or tostring(item.id))
-        table.insert(lines, "  " .. text)
+        table.insert(lines, text)
     end
 
     local old_buf = vim.fn.bufnr(name)
@@ -71,7 +71,7 @@ function M.open(adapter)
         if item.icon then
             local row = i - 1
             local id_part = string.format("{%s}", item.id)
-            local start_col = 2 + #id_part
+            local start_col = #id_part
 
             vim.api.nvim_buf_set_extmark(buf, ns_id, row, start_col, {
                 end_col = start_col + #item.icon,
