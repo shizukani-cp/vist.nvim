@@ -15,6 +15,7 @@
 
 ---@class Vist.Adapter
 ---@field bufname fun(): string
+---@field filetype? fun(): string
 ---@field list fun(): Vist.Item[]
 ---@field parse? fun(state: Vist.State[]): Vist.Action<any>[]
 ---@field do_action? fun(action: Vist.Action<string>)
@@ -43,6 +44,7 @@ local M = {}
 ---@param adapter Vist.Adapter
 function M.open(adapter)
     local name = adapter.bufname()
+    local ft = adapter.filetype() or "vist"
     local items = adapter.list()
     local lines = {}
     for _, item in ipairs(items) do
@@ -59,6 +61,7 @@ function M.open(adapter)
     vim.api.nvim_buf_set_name(buf, name)
     vim.api.nvim_buf_set_lines(buf, 0, -1, false, lines)
     vim.api.nvim_set_current_buf(buf)
+    vim.bo[buf].filetype = ft
     vim.bo[buf].modified = false
     vim.bo[buf].buftype = "acwrite"
     vim.bo[buf].bufhidden = "hide"
